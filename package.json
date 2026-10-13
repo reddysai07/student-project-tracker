@@ -1,16 +1,20 @@
 {
-  "name": "student-project-tracker",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=22.18.0 <23"
-  },
-  "scripts": {
-    "start": "node server.js",
-    "test": "node --test test/*.test.js"
-  },
-  "dependencies": {
-    "express": "^5.1.0"
-  }
+"name": "student-project-tracker",
+"version": "1.0.0",
+"private": true,
+"type": "module",
+"engines": {
+"node": ">=22.18.0 <23"
+},
+"scripts": {
+"start": "node server.js",
+"dev": "live-server",
+"test": "node --test test/*.test.js"
+},
+"dependencies": {
+"express": "^5.1.0"
+},
+"devDependencies": {
+"live-server": "^1.2.2"
+}
 }
