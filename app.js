@@ -1,20 +1,41 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { db } from './database.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicPath = path.join(__dirname, 'public');
 
 export function createApp(database = db) {
   const app = express();
 
+  // Parse JSON request bodies.
   app.use(express.json({ limit: '10kb' }));
-  app.use(express.static('public'));
 
+  // Serve CSS, JavaScript, and other static files from public/.
+  app.use(express.static(publicPath));
+
+  // Explicitly serve the homepage at the root URL.
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(publicPath, 'index.html'));
+  });
+
+  // API health check.
   app.get('/api/health', (req, res) => {
     res.json({ ok: true });
   });
 
-  app.get('/api/projects', async (req, res) => {
-    res.json(await database.list());
+  // Get all projects.
+  app.get('/api/projects', async (req, res, next) => {
+    try {
+      res.json(await database.list());
+    } catch (error) {
+      next(error);
+    }
   });
 
+  // Validate project ID.
   function readId(req, res) {
     const id = Number(req.params.id);
 
@@ -26,6 +47,7 @@ export function createApp(database = db) {
     return id;
   }
 
+  // Validate project data.
   function readProject(req, res) {
     const name =
       typeof req.body?.name === 'string'
@@ -48,49 +70,65 @@ export function createApp(database = db) {
     return { name, status };
   }
 
-  app.post('/api/projects', async (req, res) => {
-    const project = readProject(req, res);
+  // Create a project.
+  app.post('/api/projects', async (req, res, next) => {
+    try {
+      const project = readProject(req, res);
+      if (!project) return;
 
-    if (project) {
       res.status(201).json(await database.create(project));
+    } catch (error) {
+      next(error);
     }
   });
 
-  app.put('/api/projects/:id', async (req, res) => {
-    const id = readId(req, res);
-    if (id === null) return;
+  // Update a project.
+  app.put('/api/projects/:id', async (req, res, next) => {
+    try {
+      const id = readId(req, res);
+      if (id === null) return;
 
-    const project = readProject(req, res);
-    if (!project) return;
+      const project = readProject(req, res);
+      if (!project) return;
 
-    const row = await database.update(id, project);
+      const row = await database.update(id, project);
 
-    if (!row) {
-      return res.status(404).json({
-        error: 'Project not found.'
-      });
+      if (!row) {
+        return res.status(404).json({
+          error: 'Project not found.'
+        });
+      }
+
+      res.json(row);
+    } catch (error) {
+      next(error);
     }
-
-    res.json(row);
   });
 
-  app.delete('/api/projects/:id', async (req, res) => {
-    const id = readId(req, res);
-    if (id === null) return;
+  // Delete a project.
+  app.delete('/api/projects/:id', async (req, res, next) => {
+    try {
+      const id = readId(req, res);
+      if (id === null) return;
 
-    if (!(await database.remove(id))) {
-      return res.status(404).json({
-        error: 'Project not found.'
-      });
+      if (!(await database.remove(id))) {
+        return res.status(404).json({
+          error: 'Project not found.'
+        });
+      }
+
+      res.json({ deleted: true });
+    } catch (error) {
+      next(error);
     }
-
-    res.json({ deleted: true });
   });
 
+  // Handle unknown API routes.
   app.use('/api', (req, res) => {
     res.status(404).json({ error: 'API route not found.' });
   });
 
+  // Handle invalid JSON and other errors.
   app.use((error, req, res, next) => {
     if (error.type === 'entity.parse.failed') {
       return res.status(400).json({ error: 'Invalid JSON.' });
@@ -108,7 +146,7 @@ export function createApp(database = db) {
   return app;
 }
 
-// Vercel needs a default export for this entry point.
+// Export the Express app for Vercel.
 const app = createApp();
 
 export default app;
